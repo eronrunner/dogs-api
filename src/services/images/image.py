@@ -50,7 +50,7 @@ class ImageService(Service):
 
     def search(self, **kwargs):
         size = kwargs.get("size", "med")
-        mime_types = kwargs.get("mime_types", "").lower().split(",")
+        mime_types = kwargs.get("mime_types", [])
         has_breeds = kwargs.get("has_breeds", True)
         order = kwargs.get("order", "")
         page = int(kwargs.get("page", 0))

@@ -4,7 +4,7 @@ from os.path import isfile
 from typing import List, Union
 
 import jsonutils as js
-from jsonutils.query import QuerySet
+from jsonutils.query import QuerySet, Q
 
 from src.helpers.files import ls_all_files_in_directory
 from src.helpers.pagination import Pagination
@@ -91,19 +91,21 @@ class ImageModel(GenericModel):
         print(order)
         json_data = js.JSONObject(ImageModel.list())
         mime_query = QuerySet()
+        conditions = Q(breed_ids__isnull=not has_breeds)
+        if sub_id:
+            conditions &= Q(sub_id__exact=sub_id)
         for mime in mime_types:
             mime_query += json_data.query(
+                conditions,
                 url__endswith=f".{mime.strip()}",
-                breed_ids__isnull=not has_breeds,
-                sub_id__exact=sub_id,
                 include_parent_=True,
             )
+
         if mime_query:
             json_data = mime_query
         else:
             json_data = json_data.query(
-                breed_ids__isnull=not has_breeds,
-                sub_id__exact=sub_id,
+                conditions,
                 include_parent_=True,
             )
         if order.lower() == "asc":
