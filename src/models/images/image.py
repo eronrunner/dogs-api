@@ -4,8 +4,10 @@ from os.path import isfile
 from typing import List, Union
 
 import jsonutils as js
+from jsonutils.query import QuerySet
 
 from src.helpers.files import ls_all_files_in_directory
+from src.helpers.pagination import Pagination
 from src.models.abstract import GenericModel
 
 
@@ -78,17 +80,39 @@ class ImageModel(GenericModel):
         return self
 
     @staticmethod
-    def search(has_breeds: bool, order: str, page: int, limit: int):
+    def search(**kwargs):
+        sub_id = kwargs.get("sub_id")
+        mime_types = kwargs.get("mime_types")
+        has_breeds = kwargs.get("has_breeds")
+        order = kwargs.get("order")
+        page = kwargs.get("page")
+        limit = kwargs.get("limit")
+        print(page, limit)
+        print(order)
         json_data = js.JSONObject(ImageModel.list())
-        json_data = json_data.query(breed_ids__isnull=not has_breeds, include_parent_=True)
+        mime_query = QuerySet()
+        for mime in mime_types:
+            mime_query += json_data.query(
+                url__endswith=f".{mime.strip()}",
+                breed_ids__isnull=not has_breeds,
+                sub_id__exact=sub_id,
+                include_parent_=True,
+            )
+        if mime_query:
+            json_data = mime_query
+        else:
+            json_data = json_data.query(
+                breed_ids__isnull=not has_breeds,
+                sub_id__exact=sub_id,
+                include_parent_=True,
+            )
         if order.lower() == "asc":
-            order = "id"
-            json_data = json_data.order_by(order)
+            json_data.sort(key=lambda x: x["id"])
         elif order.lower() == "desc":
-            order = "-id"
-            json_data = json_data.order_by(order)
+            json_data.sort(key=lambda x: x["id"], reverse=True)
         data = list(json_data)
-        return data[page * limit: (page + 1) * limit]
+        pagination = Pagination(page, limit, len(data), data[page * limit:(page * limit) + limit])
+        return pagination
 
     @staticmethod
     def delete(image_id):

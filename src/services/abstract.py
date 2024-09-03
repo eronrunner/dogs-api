@@ -2,5 +2,5 @@
 
 class Service:
 
-    pass
+    per_page = 20
 

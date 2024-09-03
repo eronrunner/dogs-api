@@ -1,9 +1,6 @@
 import json
-import os
 
-import PIL
-from flask import Blueprint, request, redirect, make_response, url_for, render_template
-from werkzeug.utils import secure_filename
+from flask import Blueprint, request, make_response, url_for, render_template
 
 from src.services.images.image import ImageService, image_sizes
 
@@ -38,14 +35,14 @@ def delete_image(image_id):
 
 @images.route("/search", methods=["GET"])
 def search():
-    size = image_sizes[request.args.get("size", "med")]
-    mime_types = request.args.get("mime_types", "JPEG")
+    size = request.args.get("size", "med")
+    mime_types = request.args.get("mime_types", "jpg").lower().split(",")
     format = request.args.get("format", "json")
     has_breeds = request.args.get("has_breeds", True)
     order = request.args.get("order", "")
     page = int(request.args.get("page", 0))
     limit = int(request.args.get("limit", 1))
-    images = ImageService("static/breeds").search(
+    paging = ImageService("static/breeds").search(
         size=size,
         mime_types=mime_types,
         format=format,
@@ -54,9 +51,26 @@ def search():
         page=page,
         limit=limit
     )
-    return json.dumps(images), 200
 
-@images.route("/<image_id>", methods=["GET"])
-def view_image(image_id):
-    instance = ImageService("static/breeds").model.get(image_id)
-    return render_template("image.html", image=url_for('static', filename=f"breeds/{instance['url']}"))
+    return json.dumps(paging.to_dict()), 200
+
+
+@images.route("/<image_url>", methods=["GET"])
+def view_image(image_url):
+    url = ImageService("static/breeds").view_image(image_url)
+    return render_template("image.html", image=url_for('static', filename=f"breeds/{url}"))
+
+
+@images.route("/", methods=["GET"])
+def list_images():
+    sub_id = "owner_user_id"  # owner id
+    order = request.args.get("order", "")
+    page = int(request.args.get("page", 0))
+    limit = int(request.args.get("limit"))
+    paging = ImageService("static/breeds").search(
+        sub_id=sub_id,
+        order=order,
+        page=page,
+        limit=limit
+    )
+    return json.dumps(paging.to_dict()), 200

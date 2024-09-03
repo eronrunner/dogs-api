@@ -21,32 +21,56 @@ image_sizes = {
 
 class ImageService(Service):
     model = ImageModel
+    per_page = 20
 
     def __init__(self, upload_path):
-        self.number = 20
-        self.upload_path = upload_path
-        self.format = "JPEG"
         super().__init__()
+        self.upload_path = upload_path
 
     def upload(self, file: FileStorage, sub_id=None, bread_ids=None):
         _id = uuid.uuid4()
-        file_path = f"{self.upload_path}/{str(_id.hex)}"
+        file_path = f"{self.upload_path}"
         img = Image.open(file.stream)
-        img.save(f"{file_path}.{self.format}")
+        image_url = f"{_id.hex}-full.{img.format.lower()}"
+        for size, dimensions in image_sizes.items():
+            save_path = f"{file_path}/{_id.hex}-{size}.{img.format.lower()}"
+            if dimensions[0] == -1:
+                img.save(f"{save_path}")
+            else:
+                other = img.copy()
+                other.thumbnail(dimensions)
+                other.save(f"{save_path}")
 
-        print(img, file_path)
         instance = self.model(id=str(_id), sub_id=sub_id, width=img.width, height=img.height,
-                              url=f"{str(_id.hex)}.{img.format}", original_file_name=file.filename, approved=1,
+                              url=image_url, original_file_name=file.filename, approved=1,
                               pending=0, breed_ids=bread_ids)
         instance.create()
         for breed_id in bread_ids:
             BreedModel.patch(breed_id, image=instance.to_dict())
 
-    def search(self, size, mime_types, format, has_breeds, order, page, limit):
+    def search(self, **kwargs):
+        size = kwargs.get("size", "med")
+        mime_types = kwargs.get("mime_types", "").lower().split(",")
+        has_breeds = kwargs.get("has_breeds", True)
+        order = kwargs.get("order", "")
+        page = int(kwargs.get("page", 0))
+        limit = int(kwargs.get("limit", self.per_page))
+        sub_id = kwargs.get("sub_id", None)
+
+        size = size.lower().strip()
         print(page, limit)
-        images = self.model.search(has_breeds, order, page, limit)
-        print("IMAGES", images)
-        return images
+        pagination = self.model.search(
+            sub_id=sub_id,
+            mime_types=mime_types,
+            has_breeds=has_breeds,
+            order=order,
+            page=page,
+            limit=limit
+        )
+        for item in pagination.items:
+            ext = item["url"].split(".")[-1]
+            item["url"] = f"{item['id']}-{size}.{ext}"
+        return pagination
 
     def delete(self, image_id):
         instance = self.model.get(image_id, "default")
@@ -56,3 +80,9 @@ class ImageService(Service):
         if os.path.isfile(f"{self.upload_path}/{instance.url}"):
             os.remove(f"{self.upload_path}/{instance.url}")
         return instance
+
+    def view_image(self, image_url):
+        if os.path.isfile(f"{self.upload_path}/{image_url}"):
+            return image_url
+        else:
+            raise FileNotFoundError(f"Not found: {image_url}")
